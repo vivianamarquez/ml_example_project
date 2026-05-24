@@ -16,7 +16,3 @@ env/
 
 # Local configuration and outputs
 .env
-data/raw/
-data/processed/
-models/
-reports/

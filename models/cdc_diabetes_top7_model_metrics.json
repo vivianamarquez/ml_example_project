@@ -1,0 +1,18 @@
+{
+  "selected_model": "LightGBM",
+  "feature_set": [
+    "GenHlth",
+    "Age",
+    "BMI",
+    "HighBP",
+    "HighChol",
+    "Sex",
+    "Income"
+  ],
+  "Accuracy": 0.7118219804478083,
+  "Precision": 0.2990420436402342,
+  "Recall": 0.7948790493704909,
+  "F1": 0.43458757105843226,
+  "ROC AUC": 0.8216193788518744,
+  "Average Precision": 0.41358598612779807
+}
