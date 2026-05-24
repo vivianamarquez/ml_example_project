@@ -101,7 +101,22 @@ This repo also includes a small Flask web app:
 
 The app lets a user enter the 7 model inputs, returns a diabetes/prediabetes
 risk result, and generates an individual SHAP waterfall plot for that
-prediction.
+prediction. If an OpenAI API key is configured, the app also asks ChatGPT to
+write a plain-English explanation of the model result and practical next steps.
+If the OpenAI request fails because of quota, billing, model access, or network
+issues, the app shows that the explanation failed instead of inventing a
+fallback explanation.
+
+Create or update `.env` with your OpenAI API key:
+
+```text
+OPENAI_API_KEY=your_api_key_here
+OPENAI_MODEL=gpt-5-mini
+```
+
+The API key is loaded server-side by Flask and should not be exposed in
+browser/client-side code. The `.env` file is ignored by git. Restart the Flask
+app after changing `.env`.
 
 Run the app from the activated conda environment:
 
@@ -190,6 +205,7 @@ Key packages include:
 
 - Jupyter Notebook and IPython kernel support
 - Flask
+- OpenAI Python SDK
 - NumPy, pandas, and SciPy
 - scikit-learn
 - LightGBM, XGBoost, and CatBoost

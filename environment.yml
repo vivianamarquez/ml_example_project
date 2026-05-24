@@ -23,4 +23,5 @@ dependencies:
   - python-dotenv>=1.0
   - pip
   - pip:
+      - openai>=1.99
       - ucimlrepo

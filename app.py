@@ -1,4 +1,5 @@
 from functools import lru_cache
+import json
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -7,7 +8,9 @@ import joblib
 import matplotlib
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, url_for
+from openai import OpenAI
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -15,9 +18,12 @@ import shap
 
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env", override=True)
+
 MODEL_PATH = BASE_DIR / "models" / "cdc_diabetes_top7_best_model.joblib"
 BACKGROUND_PATH = BASE_DIR / "models" / "shap_background_top7.csv"
 SHAP_OUTPUT_DIR = BASE_DIR / "static" / "shap_outputs"
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5-mini")
 
 FEATURES = ["GenHlth", "Age", "BMI", "HighBP", "HighChol", "Sex", "Income"]
 
@@ -78,6 +84,38 @@ DEFAULT_VALUES = {
     "Sex": 0,
     "Income": 5,
 }
+
+AI_EXPLANATION_INSTRUCTIONS = """
+You explain an educational diabetes risk prediction to the person who just used
+the web app.
+
+Write like a friendly person explaining the result, not like a report.
+Keep it short, direct, and easy to skim.
+
+Output exactly 3 short paragraphs:
+1. What the result means in one or two plain sentences.
+2. The main reasons for the result, mentioning only the top 2 factors from the
+   feature contributions.
+3. A gentle next step the person can take.
+
+Style:
+- Use "you."
+- Avoid technical words such as SHAP, class, model output, contribution, false
+  positive, or feature importance.
+- Avoid long lists.
+- Avoid saying "CDC survey dataset" more than once.
+- Keep the full response under 95 words.
+
+Safety rules:
+- Do not diagnose diabetes or prediabetes.
+- Do not claim the model is clinically validated.
+- Do not say the person definitely has or does not have diabetes.
+- Do not recommend medication, supplements, or treatment changes.
+- Appropriate next steps include asking about A1C or fasting glucose screening,
+  checking blood pressure and cholesterol, and reviewing activity, nutrition,
+  and weight-related goals with a professional.
+- Keep the response under 180 words.
+"""
 
 app = Flask(__name__)
 
@@ -152,6 +190,55 @@ def format_feature_value(feature, value):
     return labels.get(int(value), str(value))
 
 
+def readable_inputs(values):
+    return {
+        FEATURE_LABELS[feature]: format_feature_value(feature, values[feature])
+        for feature in FEATURES
+    }
+
+
+def generate_ai_explanation(input_values, result):
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return None, "OpenAI explanation unavailable: no API key was found in `.env`.", False
+
+    prompt_payload = {
+        "inputs": readable_inputs(input_values),
+        "model_result": {
+            "risk_label": result["risk_label"],
+            "probability_percent": round(result["probability_percent"], 1),
+        },
+        "top_feature_contributions": result["contributions"],
+        "educational_disclaimer": (
+            "This is a machine learning demo and should not be used for actual "
+            "diagnosis or treatment decisions."
+        ),
+    }
+
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.responses.create(
+            model=OPENAI_MODEL,
+            instructions=AI_EXPLANATION_INSTRUCTIONS,
+            input=json.dumps(prompt_payload, indent=2),
+            max_output_tokens=1200,
+            reasoning={"effort": "minimal"},
+        )
+        explanation = response.output_text.strip()
+        if not explanation:
+            incomplete_details = getattr(response, "incomplete_details", None)
+            if incomplete_details:
+                raise RuntimeError(f"OpenAI response was incomplete: {incomplete_details}")
+            raise RuntimeError("OpenAI returned an empty explanation.")
+        return explanation, None, True
+    except Exception:
+        return (
+            None,
+            "OpenAI explanation failed. Check the API key, quota, billing, model name, or network connection.",
+            False,
+        )
+
+
 def clean_old_shap_plots(max_files=40):
     SHAP_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     png_files = sorted(
@@ -223,7 +310,7 @@ def predict(input_df):
     prediction = int(pipeline.predict(input_df)[0])
     shap_url, contributions = build_shap_explanation(input_df)
 
-    return {
+    result = {
         "risk_label": "Higher risk" if prediction == 1 else "Lower risk",
         "risk_class": "high" if prediction == 1 else "low",
         "probability": probability,
@@ -231,6 +318,15 @@ def predict(input_df):
         "shap_url": shap_url,
         "contributions": contributions,
     }
+    ai_explanation, ai_explanation_error, ai_explanation_from_openai = generate_ai_explanation(
+        input_df.iloc[0].to_dict(),
+        result,
+    )
+    result["ai_explanation"] = ai_explanation
+    result["ai_explanation_error"] = ai_explanation_error
+    result["ai_explanation_enabled"] = bool(os.environ.get("OPENAI_API_KEY", "").strip())
+    result["ai_explanation_from_openai"] = ai_explanation_from_openai
+    return result
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -271,6 +367,9 @@ def api_predict():
             "inputs": values,
             "risk_label": result["risk_label"],
             "probability": result["probability"],
+            "ai_explanation": result["ai_explanation"],
+            "ai_explanation_error": result["ai_explanation_error"],
+            "ai_explanation_from_openai": result["ai_explanation_from_openai"],
             "shap_image_url": url_for(
                 "static",
                 filename=result["shap_url"].replace("/static/", ""),

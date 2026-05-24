@@ -135,6 +135,25 @@
               diabetes/prediabetes class.
             </p>
 
+            <div class="ai-card">
+              <div class="section-heading">
+                <h3>What This Result Means</h3>
+              </div>
+              {% if result.ai_explanation %}
+                <p class="ai-text">{{ result.ai_explanation }}</p>
+              {% elif result.ai_explanation_error %}
+                <p class="ai-text muted">
+                  {{ result.ai_explanation_error }}
+                </p>
+              {% else %}
+                <p class="ai-text muted">
+                  Add `OPENAI_API_KEY` to the `.env` file to enable an
+                  AI-generated explanation of the model result and suggested
+                  next steps.
+                </p>
+              {% endif %}
+            </div>
+
             <div class="shap-block">
               <div class="section-heading">
                 <h3>SHAP Explanation</h3>
