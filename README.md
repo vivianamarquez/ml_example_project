@@ -89,6 +89,57 @@ Current saved outputs:
 
 - `models/cdc_diabetes_top7_best_model.joblib`
 - `models/cdc_diabetes_top7_model_metrics.json`
+- `models/shap_background_top7.csv`
+
+## Web App
+
+This repo also includes a small Flask web app:
+
+- [app.py](app.py)
+- [templates/index.html](templates/index.html)
+- [static/styles.css](static/styles.css)
+
+The app lets a user enter the 7 model inputs, returns a diabetes/prediabetes
+risk result, and generates an individual SHAP waterfall plot for that
+prediction.
+
+Run the app from the activated conda environment:
+
+```bash
+python app.py
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5001
+```
+
+If you want to run it on a different port, set `PORT`:
+
+```bash
+PORT=5050 python app.py
+```
+
+The app also exposes a simple JSON endpoint:
+
+```text
+POST /api/predict
+```
+
+Example request body:
+
+```json
+{
+  "GenHlth": 3,
+  "Age": 9,
+  "BMI": 28,
+  "HighBP": 1,
+  "HighChol": 1,
+  "Sex": 0,
+  "Income": 5
+}
+```
 
 ## How To Run
 
@@ -138,6 +189,7 @@ python -m ipykernel install --user --name ml_example_project --display-name "Pyt
 Key packages include:
 
 - Jupyter Notebook and IPython kernel support
+- Flask
 - NumPy, pandas, and SciPy
 - scikit-learn
 - LightGBM, XGBoost, and CatBoost

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CDC Diabetes Risk Predictor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="intro">
+        <p class="eyebrow">CDC Diabetes Health Indicators</p>
+        <h1>Diabetes Risk Predictor</h1>
+        <p>
+          Enter seven survey-style health indicators to get a model-estimated
+          diabetes/prediabetes risk result and a SHAP explanation for the
+          prediction.
+        </p>
+      </section>
+
+      <section class="notice" role="note">
+        <strong>Educational use only.</strong>
+        This app is a machine learning demo. It should not be used for actual
+        diagnosis, treatment decisions, or as a replacement for medical advice.
+      </section>
+
+      <section class="layout">
+        <form class="panel form-panel" method="post">
+          <div class="panel-heading">
+            <h2>Person Details</h2>
+            <p>Use the same feature coding as the CDC dataset.</p>
+          </div>
+
+          {% if error %}
+            <div class="error">{{ error }}</div>
+          {% endif %}
+
+          <label>
+            <span>{{ feature_labels.GenHlth }}</span>
+            <select name="GenHlth" required>
+              {% for value, label in choices.GenHlth %}
+                <option value="{{ value }}" {% if form_values.GenHlth|string == value|string %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>
+            <span>{{ feature_labels.Age }}</span>
+            <select name="Age" required>
+              {% for value, label in choices.Age %}
+                <option value="{{ value }}" {% if form_values.Age|string == value|string %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>
+            <span>{{ feature_labels.BMI }}</span>
+            <input
+              type="number"
+              name="BMI"
+              min="10"
+              max="80"
+              step="0.1"
+              value="{{ form_values.BMI }}"
+              required
+            >
+          </label>
+
+          <label>
+            <span>{{ feature_labels.HighBP }}</span>
+            <select name="HighBP" required>
+              {% for value, label in choices.HighBP %}
+                <option value="{{ value }}" {% if form_values.HighBP|string == value|string %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>
+            <span>{{ feature_labels.HighChol }}</span>
+            <select name="HighChol" required>
+              {% for value, label in choices.HighChol %}
+                <option value="{{ value }}" {% if form_values.HighChol|string == value|string %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>
+            <span>{{ feature_labels.Sex }}</span>
+            <select name="Sex" required>
+              {% for value, label in choices.Sex %}
+                <option value="{{ value }}" {% if form_values.Sex|string == value|string %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <label>
+            <span>{{ feature_labels.Income }}</span>
+            <select name="Income" required>
+              {% for value, label in choices.Income %}
+                <option value="{{ value }}" {% if form_values.Income|string == value|string %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <button type="submit">Predict Risk</button>
+        </form>
+
+        <section class="panel result-panel" aria-live="polite">
+          {% if result %}
+            <div class="result-header">
+              <div>
+                <p class="eyebrow">Model Result</p>
+                <h2>{{ result.risk_label }}</h2>
+              </div>
+              <span class="badge {{ result.risk_class }}">{{ "%.1f"|format(result.probability_percent) }}%</span>
+            </div>
+
+            <div class="meter" aria-label="Predicted risk score">
+              <span style="width: {{ result.probability_percent }}%"></span>
+            </div>
+            <p class="small-copy">
+              This is the model-estimated probability score for the positive
+              diabetes/prediabetes class.
+            </p>
+
+            <div class="shap-block">
+              <div class="section-heading">
+                <h3>SHAP Explanation</h3>
+                <a href="{{ result.shap_url }}" download>Download PNG</a>
+              </div>
+              <img src="{{ result.shap_url }}" alt="SHAP waterfall plot for this prediction">
+            </div>
+
+            <h3>Top Feature Contributions</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Value</th>
+                    <th>Direction</th>
+                    <th>Impact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in result.contributions %}
+                    <tr>
+                      <td>{{ row.feature }}</td>
+                      <td>{{ row.value }}</td>
+                      <td>{{ row.direction }}</td>
+                      <td>{{ "%+.4f"|format(row.impact) }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="empty-state">
+              <p class="eyebrow">Ready</p>
+              <h2>Submit the form to see a prediction.</h2>
+              <p>
+                The result will include a risk label, probability score, SHAP
+                waterfall plot, and contribution table for the seven features.
+              </p>
+            </div>
+          {% endif %}
+        </section>
+      </section>
+    </main>
+  </body>
+</html>
