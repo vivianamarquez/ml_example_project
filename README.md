@@ -18,14 +18,14 @@ This project uses a conda environment defined in `environment.yml`.
    conda activate ml_example_project
    ```
 
-3. Start JupyterLab:
+3. Start Jupyter Notebook:
 
    ```bash
-   jupyter lab
+   jupyter notebook
    ```
 
-When JupyterLab starts from the activated conda environment, use the Python
-kernel from `ml_example_project`.
+When Jupyter Notebook starts from the activated conda environment, use the
+Python kernel from `ml_example_project`.
 
 If you want this environment to appear as a named kernel in other Jupyter
 installations, register it with:
@@ -50,7 +50,7 @@ conda env remove -n ml_example_project
 
 ## Included Packages
 
-- JupyterLab and IPython kernel support
+- Jupyter Notebook, JupyterLab, and IPython kernel support
 - NumPy, pandas, and SciPy for data work
 - scikit-learn for machine learning
 - Matplotlib, seaborn, and Plotly for visualization
