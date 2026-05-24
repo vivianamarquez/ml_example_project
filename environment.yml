@@ -11,6 +11,11 @@ dependencies:
   - pandas>=2.2
   - scipy>=1.13
   - scikit-learn>=1.5
+  - imbalanced-learn>=0.13
+  - xgboost>=2.1
+  - lightgbm>=4.5
+  - catboost>=1.2
+  - shap>=0.46
   - matplotlib>=3.8
   - seaborn>=0.13
   - plotly>=5.22

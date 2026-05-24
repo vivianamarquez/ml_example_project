@@ -53,6 +53,9 @@ conda env remove -n ml_example_project
 - Jupyter Notebook, JupyterLab, and IPython kernel support
 - NumPy, pandas, and SciPy for data work
 - scikit-learn for machine learning
+- imbalanced-learn for SMOTENC and imbalanced classification workflows
+- XGBoost, LightGBM, and CatBoost for gradient-boosted tree models
+- SHAP for model interpretation
 - Matplotlib, seaborn, and Plotly for visualization
 - python-dotenv for local environment variables
 - ucimlrepo for loading datasets from the UCI Machine Learning Repository
