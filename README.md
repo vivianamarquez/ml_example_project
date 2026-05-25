@@ -170,9 +170,9 @@ This project includes the files Vercel needs for deployment:
 - `requirements.txt` lists the runtime Python packages Vercel should install.
 - `.python-version` requests Python 3.12, which is Vercel's default supported
   Python version.
-- `vercel.json` routes all web traffic to the Flask app and excludes notebooks
-  and development files from the function bundle.
-- `.vercelignore` keeps local-only files such as `.env` out of deployment.
+- `vercel.json` routes all web traffic to the Flask app.
+- `.vercelignore` keeps local-only and development files such as `.env`,
+  notebooks, and checkpoints out of deployment.
 
 The SHAP plot is generated in memory as a base64 image, so the deployed app does
 not need to write generated PNG files to disk.

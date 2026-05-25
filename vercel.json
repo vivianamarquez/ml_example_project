@@ -5,10 +5,5 @@
       "source": "/(.*)",
       "destination": "/api/index"
     }
-  ],
-  "functions": {
-    "api/index.py": {
-      "excludeFiles": "{.git/**,.ipynb_checkpoints/**,**/*.ipynb,reference/**,static/shap_outputs/**,__pycache__/**,*.pyc}"
-    }
-  }
+  ]
 }
