@@ -1,15 +1,16 @@
 from functools import lru_cache
+import base64
+from io import BytesIO
 import json
 import os
 from pathlib import Path
-from uuid import uuid4
 
 import joblib
 import matplotlib
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, url_for
+from flask import Flask, jsonify, render_template, request
 from openai import OpenAI
 
 matplotlib.use("Agg")
@@ -22,7 +23,6 @@ load_dotenv(BASE_DIR / ".env", override=True)
 
 MODEL_PATH = BASE_DIR / "models" / "cdc_diabetes_top7_best_model.joblib"
 BACKGROUND_PATH = BASE_DIR / "models" / "shap_background_top7.csv"
-SHAP_OUTPUT_DIR = BASE_DIR / "static" / "shap_outputs"
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5-mini")
 
 FEATURES = ["GenHlth", "Age", "BMI", "HighBP", "HighChol", "Sex", "Income"]
@@ -239,17 +239,6 @@ def generate_ai_explanation(input_values, result):
         )
 
 
-def clean_old_shap_plots(max_files=40):
-    SHAP_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    png_files = sorted(
-        SHAP_OUTPUT_DIR.glob("*.png"),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    )
-    for old_file in png_files[max_files:]:
-        old_file.unlink(missing_ok=True)
-
-
 def build_shap_explanation(input_df):
     _, preprocessor, explainer = load_resources()
     input_processed = preprocessor.transform(input_df)
@@ -277,15 +266,16 @@ def build_shap_explanation(input_df):
         feature_names=list(input_processed.columns),
     )
 
-    clean_old_shap_plots()
-    filename = f"shap_{uuid4().hex}.png"
-    output_path = SHAP_OUTPUT_DIR / filename
-
+    image_buffer = BytesIO()
     shap.plots.waterfall(explanation[0], max_display=len(FEATURES), show=False)
     plt.title("SHAP explanation for this prediction")
     plt.tight_layout()
-    plt.savefig(output_path, dpi=160, bbox_inches="tight")
+    plt.savefig(image_buffer, format="png", dpi=160, bbox_inches="tight")
     plt.close()
+    image_buffer.seek(0)
+    shap_image = "data:image/png;base64," + base64.b64encode(
+        image_buffer.getvalue()
+    ).decode("ascii")
 
     contributions = []
     raw_values = input_df.iloc[0].to_dict()
@@ -300,22 +290,21 @@ def build_shap_explanation(input_df):
         )
 
     contributions.sort(key=lambda row: abs(row["impact"]), reverse=True)
-    shap_url = url_for("static", filename=f"shap_outputs/{filename}")
-    return shap_url, contributions
+    return shap_image, contributions
 
 
 def predict(input_df):
     pipeline, _, _ = load_resources()
     probability = float(pipeline.predict_proba(input_df)[0, 1])
     prediction = int(pipeline.predict(input_df)[0])
-    shap_url, contributions = build_shap_explanation(input_df)
+    shap_image, contributions = build_shap_explanation(input_df)
 
     result = {
         "risk_label": "Higher risk" if prediction == 1 else "Lower risk",
         "risk_class": "high" if prediction == 1 else "low",
         "probability": probability,
         "probability_percent": probability * 100,
-        "shap_url": shap_url,
+        "shap_image": shap_image,
         "contributions": contributions,
     }
     ai_explanation, ai_explanation_error, ai_explanation_from_openai = generate_ai_explanation(
@@ -370,11 +359,7 @@ def api_predict():
             "ai_explanation": result["ai_explanation"],
             "ai_explanation_error": result["ai_explanation_error"],
             "ai_explanation_from_openai": result["ai_explanation_from_openai"],
-            "shap_image_url": url_for(
-                "static",
-                filename=result["shap_url"].replace("/static/", ""),
-                _external=True,
-            ),
+            "shap_image": result["shap_image"],
             "contributions": result["contributions"],
         }
     )

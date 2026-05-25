@@ -16,5 +16,6 @@ env/
 
 # Local configuration and outputs
 .env
+.vercel/
 static/shap_outputs/*.png
 !static/shap_outputs/.gitkeep

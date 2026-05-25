@@ -96,8 +96,11 @@ Current saved outputs:
 This repo also includes a small Flask web app:
 
 - [app.py](app.py)
+- [api/index.py](api/index.py)
 - [templates/index.html](templates/index.html)
 - [static/styles.css](static/styles.css)
+- [requirements.txt](requirements.txt)
+- [vercel.json](vercel.json)
 
 The app lets a user enter the 7 model inputs, returns a diabetes/prediabetes
 risk result, and generates an individual SHAP waterfall plot for that
@@ -154,6 +157,48 @@ Example request body:
   "Sex": 0,
   "Income": 5
 }
+```
+
+The API response includes `shap_image`, a base64 PNG data URI for the individual
+SHAP waterfall plot.
+
+## Deploying To Vercel
+
+This project includes the files Vercel needs for deployment:
+
+- `api/index.py` imports the Flask `app` for Vercel's Python runtime.
+- `requirements.txt` lists the runtime Python packages Vercel should install.
+- `.python-version` requests Python 3.12, which is Vercel's default supported
+  Python version.
+- `vercel.json` routes all web traffic to the Flask app and excludes notebooks
+  and development files from the function bundle.
+- `.vercelignore` keeps local-only files such as `.env` out of deployment.
+
+The SHAP plot is generated in memory as a base64 image, so the deployed app does
+not need to write generated PNG files to disk.
+
+Before deploying, add these environment variables in the Vercel project
+settings:
+
+```text
+OPENAI_API_KEY=your_api_key_here
+OPENAI_MODEL=gpt-5-mini
+```
+
+Do not rely on the local `.env` file in Vercel. Vercel reads environment
+variables from the project settings.
+
+To deploy with the Vercel CLI:
+
+```bash
+npm install -g vercel
+vercel
+```
+
+For production:
+
+```bash
+vercel --prod
 ```
 
 ## How To Run
