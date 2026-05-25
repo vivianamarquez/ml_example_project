@@ -157,9 +157,9 @@
             <div class="shap-block">
               <div class="section-heading">
                 <h3>SHAP Explanation</h3>
-                <a href="{{ result.shap_image }}" download="shap_explanation.png">Download PNG</a>
+                <a href="{{ result.shap_image }}" download="shap_explanation.svg">Download SVG</a>
               </div>
-              <img src="{{ result.shap_image }}" alt="SHAP waterfall plot for this prediction">
+              <img src="{{ result.shap_image }}" alt="SHAP-style feature impact chart for this prediction">
             </div>
 
             <h3>Top Feature Contributions</h3>
@@ -190,8 +190,9 @@
               <p class="eyebrow">Ready</p>
               <h2>Submit the form to see a prediction.</h2>
               <p>
-                The result will include a risk label, probability score, SHAP
-                waterfall plot, and contribution table for the seven features.
+                The result will include a risk label, probability score,
+                feature-impact chart, and contribution table for the seven
+                features.
               </p>
             </div>
           {% endif %}

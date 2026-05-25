@@ -89,7 +89,6 @@ Current saved outputs:
 
 - `models/cdc_diabetes_top7_best_model.joblib`
 - `models/cdc_diabetes_top7_model_metrics.json`
-- `models/shap_background_top7.csv`
 
 ## Web App
 
@@ -98,14 +97,15 @@ This repo also includes a small Flask web app:
 - [app.py](app.py)
 - [api/index.py](api/index.py)
 - [templates/index.html](templates/index.html)
-- [static/styles.css](static/styles.css)
+- [public/styles.css](public/styles.css)
 - [requirements.txt](requirements.txt)
 - [vercel.json](vercel.json)
 
 The app lets a user enter the 7 model inputs, returns a diabetes/prediabetes
-risk result, and generates an individual SHAP waterfall plot for that
-prediction. If an OpenAI API key is configured, the app also asks ChatGPT to
-write a plain-English explanation of the model result and practical next steps.
+risk result, and generates an individual feature-impact chart using LightGBM's
+native SHAP contribution values. If an OpenAI API key is configured, the app
+also asks ChatGPT to write a plain-English explanation of the model result and
+practical next steps.
 If the OpenAI request fails because of quota, billing, model access, or network
 issues, the app shows that the explanation failed instead of inventing a
 fallback explanation.
@@ -159,8 +159,8 @@ Example request body:
 }
 ```
 
-The API response includes `shap_image`, a base64 PNG data URI for the individual
-SHAP waterfall plot.
+The API response includes `shap_image`, a base64 SVG data URI for the individual
+feature-impact chart.
 
 ## Deploying To Vercel
 
@@ -174,8 +174,10 @@ This project includes the files Vercel needs for deployment:
 - `.vercelignore` keeps local-only and development files such as `.env`,
   notebooks, and checkpoints out of deployment.
 
-The SHAP plot is generated in memory as a base64 image, so the deployed app does
-not need to write generated PNG files to disk.
+The feature-impact chart is generated in memory as a base64 SVG, so the
+deployed app does not need to write generated image files to disk. The runtime
+app uses LightGBM's built-in contribution values instead of the full `shap`
+package to keep the Vercel bundle small enough for serverless deployment.
 
 Before deploying, add these environment variables in the Vercel project
 settings:

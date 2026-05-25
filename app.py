@@ -1,28 +1,22 @@
 from functools import lru_cache
 import base64
-from io import BytesIO
+from html import escape
 import json
 import os
 from pathlib import Path
 
 import joblib
-import matplotlib
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from openai import OpenAI
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import shap
-
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env", override=True)
 
 MODEL_PATH = BASE_DIR / "models" / "cdc_diabetes_top7_best_model.joblib"
-BACKGROUND_PATH = BASE_DIR / "models" / "shap_background_top7.csv"
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5-mini")
 
 FEATURES = ["GenHlth", "Age", "BMI", "HighBP", "HighChol", "Sex", "Income"]
@@ -117,35 +111,18 @@ Safety rules:
 - Keep the response under 180 words.
 """
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="public", static_url_path="")
 
 
 @lru_cache(maxsize=1)
 def load_resources():
     if not MODEL_PATH.exists():
         raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
-    if not BACKGROUND_PATH.exists():
-        raise FileNotFoundError(f"SHAP background file not found: {BACKGROUND_PATH}")
 
     pipeline = joblib.load(MODEL_PATH)
-    background_raw = pd.read_csv(BACKGROUND_PATH)[FEATURES]
-
     preprocessor = pipeline.named_steps["preprocessor"]
     model = pipeline.named_steps["model"]
-    background_processed = preprocessor.transform(background_raw)
-
-    if not isinstance(background_processed, pd.DataFrame):
-        background_processed = pd.DataFrame(
-            background_processed,
-            columns=preprocessor.get_feature_names_out(),
-        )
-
-    explainer = shap.TreeExplainer(
-        model,
-        data=background_processed,
-        model_output="probability",
-    )
-    return pipeline, preprocessor, explainer
+    return pipeline, preprocessor, model
 
 
 def parse_payload(payload):
@@ -239,8 +216,65 @@ def generate_ai_explanation(input_values, result):
         )
 
 
+def build_shap_svg(contributions):
+    width = 860
+    row_height = 54
+    margin_left = 230
+    margin_right = 90
+    top = 58
+    height = top + (len(contributions) * row_height) + 28
+    max_abs = max(abs(row["impact"]) for row in contributions) or 1
+    axis_x = margin_left + ((width - margin_left - margin_right) / 2)
+    max_bar = (width - margin_left - margin_right) / 2
+
+    rows = []
+    for index, row in enumerate(contributions):
+        y = top + index * row_height
+        impact = row["impact"]
+        bar_width = max(4, abs(impact) / max_abs * max_bar)
+        if impact >= 0:
+            x = axis_x
+            color = "#ea7a1f"
+            direction_label = "Increases risk"
+        else:
+            x = axis_x - bar_width
+            color = "#2563eb"
+            direction_label = "Lowers risk"
+
+        rows.append(
+            f"""
+            <text x="24" y="{y + 18}" class="feature">{escape(row["feature"])}</text>
+            <text x="24" y="{y + 38}" class="value">{escape(row["value"])}</text>
+            <rect x="{x:.2f}" y="{y}" width="{bar_width:.2f}" height="24" rx="5" fill="{color}" />
+            <text x="{axis_x + max_bar + 18}" y="{y + 18}" class="impact">{direction_label}</text>
+            <text x="{axis_x + max_bar + 18}" y="{y + 38}" class="value">{impact:+.4f}</text>
+            """
+        )
+
+    svg = f"""
+    <svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">
+      <style>
+        .title {{ font: 700 24px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #182230; }}
+        .subtitle {{ font: 500 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #667085; }}
+        .feature {{ font: 700 15px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #182230; }}
+        .value {{ font: 500 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #667085; }}
+        .impact {{ font: 700 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #344054; }}
+        .axis {{ stroke: #98a2b3; stroke-width: 2; }}
+        .grid {{ stroke: #e4e7ec; stroke-width: 1; }}
+      </style>
+      <rect width="100%" height="100%" fill="#ffffff" />
+      <text x="24" y="30" class="title">Feature impact for this prediction</text>
+      <text x="24" y="50" class="subtitle">Orange pushes the score higher. Blue pushes it lower.</text>
+      <line x1="{axis_x:.2f}" y1="{top - 8}" x2="{axis_x:.2f}" y2="{height - 20}" class="axis" />
+      <line x1="{margin_left}" y1="{top - 8}" x2="{width - margin_right}" y2="{top - 8}" class="grid" />
+      {''.join(rows)}
+    </svg>
+    """
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
+
+
 def build_shap_explanation(input_df):
-    _, preprocessor, explainer = load_resources()
+    _, preprocessor, model = load_resources()
     input_processed = preprocessor.transform(input_df)
 
     if not isinstance(input_processed, pd.DataFrame):
@@ -249,37 +283,12 @@ def build_shap_explanation(input_df):
             columns=preprocessor.get_feature_names_out(),
         )
 
-    shap_values = explainer(input_processed)
-    shap_values_array = shap_values.values
-    shap_base_values = shap_values.base_values
-
-    if shap_values_array.ndim == 3:
-        shap_values_array = shap_values_array[:, :, 1]
-        if np.ndim(shap_base_values) == 2:
-            shap_base_values = shap_base_values[:, 1]
-
-    raw_values_for_plot = input_df[list(input_processed.columns)].to_numpy()
-    explanation = shap.Explanation(
-        values=shap_values_array,
-        base_values=shap_base_values,
-        data=raw_values_for_plot,
-        feature_names=list(input_processed.columns),
-    )
-
-    image_buffer = BytesIO()
-    shap.plots.waterfall(explanation[0], max_display=len(FEATURES), show=False)
-    plt.title("SHAP explanation for this prediction")
-    plt.tight_layout()
-    plt.savefig(image_buffer, format="png", dpi=160, bbox_inches="tight")
-    plt.close()
-    image_buffer.seek(0)
-    shap_image = "data:image/png;base64," + base64.b64encode(
-        image_buffer.getvalue()
-    ).decode("ascii")
+    shap_contributions = model.booster_.predict(input_processed, pred_contrib=True)
+    shap_values = np.asarray(shap_contributions)[0][:-1]
 
     contributions = []
     raw_values = input_df.iloc[0].to_dict()
-    for feature, shap_value in zip(explanation.feature_names, explanation.values[0]):
+    for feature, shap_value in zip(input_processed.columns, shap_values):
         contributions.append(
             {
                 "feature": FEATURE_LABELS[feature],
@@ -290,6 +299,7 @@ def build_shap_explanation(input_df):
         )
 
     contributions.sort(key=lambda row: abs(row["impact"]), reverse=True)
+    shap_image = build_shap_svg(contributions)
     return shap_image, contributions
 
 
