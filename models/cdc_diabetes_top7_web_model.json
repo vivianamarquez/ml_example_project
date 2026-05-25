@@ -1,0 +1,73 @@
+{
+  "selected_model": "Logistic Regression",
+  "model_purpose": "Lightweight Vercel web-app model",
+  "feature_set": [
+    "GenHlth",
+    "Age",
+    "BMI",
+    "HighBP",
+    "HighChol",
+    "Sex",
+    "Income"
+  ],
+  "scaled_features": [
+    "BMI",
+    "GenHlth",
+    "Age",
+    "Income"
+  ],
+  "binary_features": [
+    "HighBP",
+    "HighChol",
+    "Sex"
+  ],
+  "model_features": [
+    "BMI",
+    "GenHlth",
+    "Age",
+    "Income",
+    "HighBP",
+    "HighChol",
+    "Sex"
+  ],
+  "coefficients": {
+    "BMI": 0.5074925231021121,
+    "GenHlth": 0.6263075227200156,
+    "Age": 0.5061413761755217,
+    "Income": -0.14383357906406924,
+    "HighBP": 0.7594877720520047,
+    "HighChol": 0.6055619607238583,
+    "Sex": 0.2966745865423608
+  },
+  "intercept": -1.342391493425082,
+  "threshold": 0.5,
+  "scaler": {
+    "BMI": {
+      "mean": 28.377961408073162,
+      "scale": 6.598276964478023
+    },
+    "GenHlth": {
+      "mean": 2.5118357773573003,
+      "scale": 1.0683754305956445
+    },
+    "Age": {
+      "mean": 8.03282678965626,
+      "scale": 3.0513799829221417
+    },
+    "Income": {
+      "mean": 6.050831756543677,
+      "scale": 2.0726558842356524
+    }
+  },
+  "metrics": {
+    "Accuracy": 0.7252246925260171,
+    "Precision": 0.30519333257738973,
+    "Recall": 0.7614938463714811,
+    "F1": 0.43574695430444815,
+    "ROC AUC": 0.8154459532617486,
+    "Average Precision": 0.38599789020530456
+  },
+  "positive_class_rate_train": 0.13933400346893723,
+  "positive_class_rate_test": 0.13932907600126143,
+  "random_state": 42
+}

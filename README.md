@@ -42,7 +42,7 @@ The notebook walks through:
 
 ## Current Results
 
-The selected model is `LightGBM`.
+The analysis notebook selects `LightGBM`.
 
 | Metric | Value |
 |:--|--:|
@@ -59,6 +59,19 @@ class, but precision is around 30%, meaning many flagged respondents are false
 positives. That tradeoff may be acceptable for low-cost outreach or screening,
 but it would not be appropriate for diagnosis or high-stakes decisions by
 itself.
+
+For deployment, the Flask app uses a lightweight `Logistic Regression` export
+instead of LightGBM. This avoids Vercel system-library issues such as
+`libgomp.so.1` while keeping the result explainable.
+
+| Web App Metric | Value |
+|:--|--:|
+| Accuracy | 0.725 |
+| Precision | 0.305 |
+| Recall | 0.761 |
+| F1 | 0.436 |
+| ROC AUC | 0.815 |
+| Average Precision | 0.386 |
 
 ## Stakeholder Insights
 
@@ -89,6 +102,8 @@ Current saved outputs:
 
 - `models/cdc_diabetes_top7_best_model.joblib`
 - `models/cdc_diabetes_top7_model_metrics.json`
+- `models/cdc_diabetes_top7_web_model.json`
+- `models/cdc_diabetes_top7_web_model_metrics.json`
 
 ## Web App
 
@@ -100,12 +115,13 @@ This repo also includes a small Flask web app:
 - [public/styles.css](public/styles.css)
 - [requirements.txt](requirements.txt)
 - [vercel.json](vercel.json)
+- [scripts/train_web_model.py](scripts/train_web_model.py)
 
 The app lets a user enter the 7 model inputs, returns a diabetes/prediabetes
-risk result, and generates an individual feature-impact chart using LightGBM's
-native SHAP contribution values. If an OpenAI API key is configured, the app
-also asks ChatGPT to write a plain-English explanation of the model result and
-practical next steps.
+risk result, and generates an individual feature-impact chart from the deployed
+logistic-regression model coefficients. If an OpenAI API key is configured, the
+app also asks ChatGPT to write a plain-English explanation of the model result
+and practical next steps.
 If the OpenAI request fails because of quota, billing, model access, or network
 issues, the app shows that the explanation failed instead of inventing a
 fallback explanation.
@@ -120,6 +136,12 @@ OPENAI_MODEL=gpt-5-mini
 The API key is loaded server-side by Flask and should not be exposed in
 browser/client-side code. The `.env` file is ignored by git. Restart the Flask
 app after changing `.env`.
+
+To regenerate the lightweight web-app model:
+
+```bash
+python scripts/train_web_model.py
+```
 
 Run the app from the activated conda environment:
 
@@ -159,8 +181,8 @@ Example request body:
 }
 ```
 
-The API response includes `shap_image`, a base64 SVG data URI for the individual
-feature-impact chart.
+The API response includes `feature_impact_image`, a base64 SVG data URI for the
+individual feature-impact chart.
 
 ## Deploying To Vercel
 
@@ -176,8 +198,9 @@ This project includes the files Vercel needs for deployment:
 
 The feature-impact chart is generated in memory as a base64 SVG, so the
 deployed app does not need to write generated image files to disk. The runtime
-app uses LightGBM's built-in contribution values instead of the full `shap`
-package to keep the Vercel bundle small enough for serverless deployment.
+app uses a small JSON model export instead of LightGBM, SHAP, NumPy, pandas, or
+scikit-learn. This keeps the Vercel bundle small and avoids missing native
+library errors like `libgomp.so.1`.
 
 Before deploying, add these environment variables in the Vercel project
 settings:

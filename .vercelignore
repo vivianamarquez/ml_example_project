@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 *.ipynb
 reference/
+models/cdc_diabetes_top7_best_model.joblib
+models/cdc_diabetes_top7_model_metrics.json
+scripts/

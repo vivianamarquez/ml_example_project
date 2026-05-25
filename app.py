@@ -2,12 +2,10 @@ from functools import lru_cache
 import base64
 from html import escape
 import json
+import math
 import os
 from pathlib import Path
 
-import joblib
-import numpy as np
-import pandas as pd
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 from openai import OpenAI
@@ -16,7 +14,7 @@ from openai import OpenAI
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env", override=True)
 
-MODEL_PATH = BASE_DIR / "models" / "cdc_diabetes_top7_best_model.joblib"
+MODEL_PATH = BASE_DIR / "models" / "cdc_diabetes_top7_web_model.json"
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5-mini")
 
 FEATURES = ["GenHlth", "Age", "BMI", "HighBP", "HighChol", "Sex", "Income"]
@@ -115,14 +113,11 @@ app = Flask(__name__, static_folder="public", static_url_path="")
 
 
 @lru_cache(maxsize=1)
-def load_resources():
+def load_model():
     if not MODEL_PATH.exists():
         raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
 
-    pipeline = joblib.load(MODEL_PATH)
-    preprocessor = pipeline.named_steps["preprocessor"]
-    model = pipeline.named_steps["model"]
-    return pipeline, preprocessor, model
+    return json.loads(MODEL_PATH.read_text())
 
 
 def parse_payload(payload):
@@ -156,7 +151,7 @@ def parse_payload(payload):
     values["Sex"] = get_choice("Sex")
     values["Income"] = get_choice("Income")
 
-    return values, pd.DataFrame([values], columns=FEATURES)
+    return values
 
 
 def format_feature_value(feature, value):
@@ -216,7 +211,7 @@ def generate_ai_explanation(input_values, result):
         )
 
 
-def build_shap_svg(contributions):
+def build_feature_impact_svg(contributions):
     width = 860
     row_height = 54
     margin_left = 230
@@ -273,52 +268,78 @@ def build_shap_svg(contributions):
     return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
 
 
-def build_shap_explanation(input_df):
-    _, preprocessor, model = load_resources()
-    input_processed = preprocessor.transform(input_df)
+def sigmoid(value):
+    if value >= 0:
+        z = math.exp(-value)
+        return 1 / (1 + z)
 
-    if not isinstance(input_processed, pd.DataFrame):
-        input_processed = pd.DataFrame(
-            input_processed,
-            columns=preprocessor.get_feature_names_out(),
-        )
+    z = math.exp(value)
+    return z / (1 + z)
 
-    shap_contributions = model.booster_.predict(input_processed, pred_contrib=True)
-    shap_values = np.asarray(shap_contributions)[0][:-1]
+
+def transform_values(values, model):
+    transformed = {}
+
+    for feature in model["scaled_features"]:
+        scaler = model["scaler"][feature]
+        transformed[feature] = (float(values[feature]) - scaler["mean"]) / scaler["scale"]
+
+    for feature in model["binary_features"]:
+        transformed[feature] = float(values[feature])
+
+    return transformed
+
+
+def score_model(values, model):
+    transformed = transform_values(values, model)
+    log_odds = model["intercept"]
+
+    for feature in model["model_features"]:
+        log_odds += model["coefficients"][feature] * transformed[feature]
+
+    return sigmoid(log_odds), transformed
+
+
+def build_feature_explanation(values, transformed_values, model):
+    coefficients = model["coefficients"]
 
     contributions = []
-    raw_values = input_df.iloc[0].to_dict()
-    for feature, shap_value in zip(input_processed.columns, shap_values):
+    for feature in model["model_features"]:
+        impact = coefficients[feature] * transformed_values[feature]
         contributions.append(
             {
                 "feature": FEATURE_LABELS[feature],
-                "value": format_feature_value(feature, raw_values[feature]),
-                "impact": float(shap_value),
-                "direction": "Increases risk" if shap_value >= 0 else "Lowers risk",
+                "value": format_feature_value(feature, values[feature]),
+                "impact": float(impact),
+                "direction": "Increases risk" if impact >= 0 else "Lowers risk",
             }
         )
 
     contributions.sort(key=lambda row: abs(row["impact"]), reverse=True)
-    shap_image = build_shap_svg(contributions)
-    return shap_image, contributions
+    impact_image = build_feature_impact_svg(contributions)
+    return impact_image, contributions
 
 
-def predict(input_df):
-    pipeline, _, _ = load_resources()
-    probability = float(pipeline.predict_proba(input_df)[0, 1])
-    prediction = int(pipeline.predict(input_df)[0])
-    shap_image, contributions = build_shap_explanation(input_df)
+def predict(values):
+    model = load_model()
+    probability, transformed_values = score_model(values, model)
+    prediction = int(probability >= model.get("threshold", 0.5))
+    impact_image, contributions = build_feature_explanation(
+        values,
+        transformed_values,
+        model,
+    )
 
     result = {
         "risk_label": "Higher risk" if prediction == 1 else "Lower risk",
         "risk_class": "high" if prediction == 1 else "low",
         "probability": probability,
         "probability_percent": probability * 100,
-        "shap_image": shap_image,
+        "impact_image": impact_image,
         "contributions": contributions,
     }
     ai_explanation, ai_explanation_error, ai_explanation_from_openai = generate_ai_explanation(
-        input_df.iloc[0].to_dict(),
+        values,
         result,
     )
     result["ai_explanation"] = ai_explanation
@@ -336,8 +357,8 @@ def index():
 
     if request.method == "POST":
         try:
-            form_values, input_df = parse_payload(request.form)
-            result = predict(input_df)
+            form_values = parse_payload(request.form)
+            result = predict(form_values)
         except Exception as exc:
             error = str(exc)
 
@@ -356,8 +377,8 @@ def index():
 def api_predict():
     try:
         payload = request.get_json(silent=True) or {}
-        values, input_df = parse_payload(payload)
-        result = predict(input_df)
+        values = parse_payload(payload)
+        result = predict(values)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -369,7 +390,7 @@ def api_predict():
             "ai_explanation": result["ai_explanation"],
             "ai_explanation_error": result["ai_explanation_error"],
             "ai_explanation_from_openai": result["ai_explanation_from_openai"],
-            "shap_image": result["shap_image"],
+            "feature_impact_image": result["impact_image"],
             "contributions": result["contributions"],
         }
     )

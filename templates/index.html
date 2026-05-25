@@ -13,7 +13,7 @@
         <h1>Diabetes Risk Predictor</h1>
         <p>
           Enter seven survey-style health indicators to get a model-estimated
-          diabetes/prediabetes risk result and a SHAP explanation for the
+          diabetes/prediabetes risk result and a feature-impact explanation for the
           prediction.
         </p>
       </section>
@@ -156,10 +156,10 @@
 
             <div class="shap-block">
               <div class="section-heading">
-                <h3>SHAP Explanation</h3>
-                <a href="{{ result.shap_image }}" download="shap_explanation.svg">Download SVG</a>
+                <h3>What Influenced This Result</h3>
+                <a href="{{ result.impact_image }}" download="feature_impact.svg">Download SVG</a>
               </div>
-              <img src="{{ result.shap_image }}" alt="SHAP-style feature impact chart for this prediction">
+              <img src="{{ result.impact_image }}" alt="Feature impact chart for this prediction">
             </div>
 
             <h3>Top Feature Contributions</h3>
